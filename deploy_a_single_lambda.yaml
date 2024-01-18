@@ -23,6 +23,7 @@ jobs:
         with:
           node-version: '16'
       
+      # Since we gitignore the node_modules folder, we have to install those dependecies during deployment
       - run: npm install
       
       - uses: jsmrcaga/action-easy-lambda-deploy@v0.0.3

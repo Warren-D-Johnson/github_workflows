@@ -1,0 +1,52 @@
+# We needed to deploy builds directly to a folder on an EC2 instance using a Github workflow.
+# In this case, it was necessary to add the IP address of the github runner to the AWS Security Group protecting the server.
+# The Github action that facilitates this also removes it during the automatic cleanup step.
+
+name: SSH Deployment
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        
+      # Add IP address to the Security Group to get through the Firewall
+      - name: Add public IP to AWS security group
+        uses: sohelamin/aws-security-group-add-ip-action@master
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-security-group-id: ${{ secrets.AWS_SECURITY_GROUP_ID }}
+          port: ${{ secrets.SSH_PORT }}
+          to-port: ${{ secrets.SSH_PORT }}
+          protocol: 'tcp'
+          description: 'GitHub Action to add IP to SG'
+
+      # Deply up to Server
+      - name: Deploy to Server
+        uses: inf166/action-sshpass-rsync@v1
+        with:
+          host: ${{ secrets.SFTP_SERVER }}
+          user: ${{ secrets.SFTP_USERNAME }}
+          port: ${{ secrets.SSH_PORT }}
+          pass: ${{ secrets.SFTP_PASSWORD }}
+          local: "./"
+          remote: "./public_html"
+
+      # Rather than specifying excludes on the rsync, we opted to prune the remote
+      - name: Remove anything in the remote file system that we don't want hanging around after transfer
+        uses: garygrossgarten/github-action-ssh@release
+        with:
+          command: rm -rf ./public_html/.git ./public_html/.github ./public_html/.gitignore
+          host: ${{ secrets.SFTP_SERVER }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: ${{ secrets.SSH_PORT }}

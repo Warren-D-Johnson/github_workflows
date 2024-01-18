@@ -1,0 +1,11 @@
+# Add this step to your workflow to invalidate a Cloudfront Cache
+# Don't forget to set the secrets!
+
+    - name: Purge Cloudfront Cache
+      uses: awact/cloudfront-action@master
+      env:
+        SOURCE_PATH: '/*'
+        AWS_REGION: 'us-east-1'
+        AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFRONT_PURGE_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFRONT_PURGE_SECRET_ACCESS_KEY }}
+        DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
