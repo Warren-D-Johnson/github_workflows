@@ -1,0 +1,36 @@
+# We have a simple lambda that needs to be deployed in one region (us-east-1).
+# This workflow uses a Github action but you could also have ZIPped the files manually and used the AWS CLI for the update to Lambda.
+# zip -r upload.zip ./ -x node_modules/aws-sdk\* -x public_html/assets\* -x .git/\* -x .github/\*
+# aws --no-paginate --region=us-east-1 lambda update-function-code --function-name wdj_my_lambda_function_name --zip-file fileb://upload.zip
+
+name: Deploy Staging Lambda
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  update_lambda:
+
+    name: 'Pull code & update lambda'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+     
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      
+      - run: npm install
+      
+      - uses: jsmrcaga/action-easy-lambda-deploy@v0.0.3
+        name: Update lambda code
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.LAMBDA_DEPLOY_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.LAMBDA_DEPLOY_SECRET_ACCESS_KEY }}
+        with:
+          function_name: wdj_my_lambda_function_name
+          region: us-east-1
+          zip_files: classes controller routes node_modules index.js package.json package-lock.json

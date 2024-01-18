@@ -1,0 +1,37 @@
+# We have a static website hosted/cached by Cloudflare.  The website origin is an S3 bucket of the same name
+# hosted in us-east-1. We deploy the files (minus what's excluded) to the S3 bucket and purge the Cloudflare Zone so we can
+# see the changes immediately.
+
+name: Deploy to S3 Bucket
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js 16.x
+      uses: actions/setup-node@v3
+      with:
+        node-version: 16.x
+    
+    - name: Deploy to Bucket
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.BUCKET_DEPLOY_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.BUCKET_DEPLOY_SECRET_ACCESS_KEY }}
+        DISABLE_ESLINT_PLUGIN: true    
+      run: |
+        aws --region=us-east-1 s3 sync . s3://www.mybucketwebsite.com --exclude ".github/*"
+        
+    - name: Purge cache
+      uses: jakejarvis/cloudflare-purge-action@master
+      env:
+        CLOUDFLARE_ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+   

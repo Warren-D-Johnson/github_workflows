@@ -1,0 +1,57 @@
+# We had some legacy apps written in the Laravel framework that we needed to keep around so we modified them to be deployed and run from AWS Lambda.
+
+name: Deploy to Staging Lambda
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  update_lambda:
+    # Wanted to deploy ONLY if a token was specified
+    if: "contains(github.event.head_commit.message, 'DEPLOY-ALL')"  
+
+    name: 'Pull code & update lambda'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      # Setup some initial values on PHP.  Older version as you can see.
+      - name: Setup PHP 7.4 
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: mbstring, intl
+          ini-values: post_max_size=256M, max_execution_time=180
+      
+      # Few artisan commands to get clear out cache and other bits
+      - name: Run artisan commands
+        run: |
+          php artisan route:clear && php artisan route:cache && php artisan view:cache && php artisan route:list
+          echo
+
+      # Deploy to the staging lambda using AWS v2 CLI.  Exclude a few folders.
+      - name: Deploy Lambda
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.LAMBDA_DEPLOY_STAGING_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.LAMBDA_DEPLOY_STAGING_SECRET_ACCESS_KEY }}
+        run: |
+          zip -r upload.zip ./ -x public/assets\* -x .git/\* -x .github/\*
+          aws --no-paginate --region=us-east-1 lambda update-function-code --function-name wdj_my_laravel_lambda --zip-file fileb://upload.zip
+
+      # Static and App folder deployed to S3 buckets that served as origin to some pullzones at Bunny.net CDN
+      - name: Deploy files to S3 Bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BUCKET_DEPLOY_STAGING_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BUCKET_DEPLOY_STAGING_SECRET_ACCESS_KEY }}
+        run: |
+          aws --region=us-east-1 s3 sync public/assets s3://assets01staging.mylaravelwebsite.com/assets
+          aws --region=us-east-1 s3 sync public/app s3://assets01staging.mylaravelwebsite.com/app
+      
+      # We were using a great little CDN service Bunny.net.  I highly recommend it.
+      - name: Purge Bunny Cache Pullzone 
+        run: |
+          curl -i -X POST https://api.bunny.net/pullzone/${{secrets.BUNNY_STAGING_PULLZONE_ID}}/purgeCache -H "AccessKey: ${{secrets.BUNNY_STAGING_API_KEY}}" -H "Content-Type: application/json" -H "Content-Length: 0" 
+

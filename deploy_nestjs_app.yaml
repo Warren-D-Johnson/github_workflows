@@ -1,0 +1,51 @@
+# Configure, build and deploy a NestJS framework application to a lambda in us-east-1.
+
+name: NestJS App Deployment to Staging Environment
+
+on:
+  push:
+    branches: 
+      - staging
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Use Node.js 16.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+
+      # Use environment-specific variables, install dependencies and build
+      - name: Build Dist
+        run: cp -f .env.staging .env ;
+             npm i -g rimraf ;
+             npm install ;
+             npm run build ;
+             sudo apt-get update && sudo apt-get install -y jq            
+
+      # post_env.js is a script we use to get env files directly into lambda environment configuration
+      - name: Update ENV Variables at lambda
+        run: npm install aws-sdk fs path;
+             node post_env.js  
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.LAMBDA_DEPLOY_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.LAMBDA_DEPLOY_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+          FUNCTION_NAME: wdj_my_lambda_function_nv
+
+      # Move a few folders around, ZIP up the dist and static folders and update the lambda using the AWS v2 CLI
+      - name: Deploy Lambda
+        run: |
+          cd src;
+          mv static ../dist;
+          cd ../dist; 
+          zip -r upload.zip * 
+          aws --no-paginate --region=us-east-1 lambda update-function-code --function-name wdj_my_lambda_function_nv --zip-file fileb://upload.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.LAMBDA_DEPLOY_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.LAMBDA_DEPLOY_SECRET_ACCESS_KEY }}
